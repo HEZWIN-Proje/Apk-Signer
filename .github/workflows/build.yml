@@ -21,12 +21,13 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Install Gradle
-      run: |
-        wget https://services.gradle.org/distributions/gradle-8.2-bin.zip
-        unzip -q gradle-8.2-bin.zip
-        export PATH=$PATH:$PWD/gradle-8.2/bin
-        gradle wrapper --gradle-version 8.2
+    - name: Setup Gradle 8.2
+      uses: gradle/gradle-build-action@v2
+      with:
+        gradle-version: 8.2
+
+    - name: Generate Gradle Wrapper
+      run: gradle wrapper --gradle-version 8.2
 
     - name: Make gradlew executable
       run: chmod +x gradlew
