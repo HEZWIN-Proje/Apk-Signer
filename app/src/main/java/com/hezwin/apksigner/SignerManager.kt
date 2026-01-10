@@ -13,11 +13,17 @@ import java.security.KeyStore
 import java.security.PrivateKey
 import java.security.cert.X509Certificate
 
+// 1. BURASI KRİTİK: SignResult burada tanımlanmalı
+data class SignResult(
+    val success: Boolean,
+    val message: String,
+    val outputPath: String = ""
+)
+
 class SignerManager(private val context: Context) {
 
     companion object {
         private const val KEYSTORE_FILE = "HEZWIN_PRO.jks"
-        // GitHub Raw bağlantısı
         private const val JKS_DOWNLOAD_URL = "https://github.com/HEZWIN-Proje/Apk-Signer/raw/main/app/src/main/assets/HEZWIN_PRO.jks"
         private const val KEYSTORE_PASSWORD = "hezwin2025"
         private const val KEY_ALIAS = "hezwin"
@@ -47,7 +53,7 @@ class SignerManager(private val context: Context) {
 
                 outputFile = File(outputDir, originalFileName.replace(".apk", "_signed.apk"))
 
-                logger("Adım 4: APK İmzalanıyor (V2+V3)...")
+                logger("Adım 4: APK İmzalanıyor (V1+V2+V3)...")
                 val signerConfig = ApkSigner.SignerConfig.Builder(
                     KEY_ALIAS, privateKey, certificates
                 ).build()
@@ -55,7 +61,7 @@ class SignerManager(private val context: Context) {
                 ApkSigner.Builder(listOf(signerConfig))
                     .setInputApk(tempInputFile)
                     .setOutputApk(outputFile)
-                    .setV1SigningEnabled(true) // Uyumluluk için V1 aktif edildi
+                    .setV1SigningEnabled(true)
                     .setV2SigningEnabled(true)
                     .setV3SigningEnabled(true)
                     .build()
@@ -79,18 +85,16 @@ class SignerManager(private val context: Context) {
     private fun loadOrDownloadKeystore(logger: (String) -> Unit): Pair<PrivateKey, List<X509Certificate>> {
         val ksFile = File(context.filesDir, KEYSTORE_FILE)
 
-        // Eğer dosya yoksa internetten indir
         if (!ksFile.exists()) {
-            logger("Anahtar bulunamadı, GitHub'dan indiriliyor...")
+            logger("Anahtar indiriliyor...")
             try {
                 URL(JKS_DOWNLOAD_URL).openStream().use { input ->
                     FileOutputStream(ksFile).use { output ->
                         input.copyTo(output)
                     }
                 }
-                logger("Anahtar başarıyla indirildi.")
             } catch (e: Exception) {
-                throw Exception("Anahtar indirilemedi: İnternet bağlantınızı kontrol edin. ${e.message}")
+                throw Exception("Anahtar indirilemedi: ${e.message}")
             }
         }
 
