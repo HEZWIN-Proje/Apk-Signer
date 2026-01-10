@@ -19,88 +19,111 @@ data class SignResult(
 class SignerManager(private val context: Context) {
 
     companion object {
-        private const val KEYSTORE_FILE = "HEZWIN_PRO.jks"
         private const val KEYSTORE_PASSWORD = "hezwin2025"
         private const val KEY_ALIAS = "hezwin"
         private const val KEY_PASSWORD = "hezwin2025"
         private const val OUTPUT_FOLDER = "HEZWIN_Signed"
     }
 
-    fun signApk(apkUri: Uri, originalFileName: String, logger: (String) -> Unit): SignResult {
+    fun signApk(
+        apkUri: Uri,
+        originalFileName: String,
+        logger: (String) -> Unit
+    ): SignResult {
+
         var tempInputFile: File? = null
         var tempAlignedFile: File? = null
-        var outputFile: File? = null
 
         try {
-            // Step 1: Copy APK to temp location
-            logger("Step 1: Copying APK to temporary location...")
-            tempInputFile = File(context.cacheDir, "temp_input.apk")
+            logger("Step 1: Copying APK...")
+            tempInputFile = File(context.cacheDir, "input.apk")
             copyUriToFile(apkUri, tempInputFile)
-            logger("✓ APK copied (${tempInputFile.length() / 1024} KB)")
 
-            // Step 2: ZipAlign
-            logger("\nStep 2: Running zipalign (4-byte alignment)...")
-            tempAlignedFile = File(context.cacheDir, "temp_aligned.apk")
-            val aligner = ZipAligner()
-            
-            if (!aligner.alignZip(tempInputFile, tempAlignedFile)) {
-                return SignResult(false, "ZipAlign failed!")
-            }
-            logger("✓ ZipAlign completed (${tempAlignedFile.length() / 1024} KB)")
-
-            // Step 3: Load keystore
-            logger("\nStep 3: Loading keystore...")
-            val (privateKey, certificates) = loadKeystore()
-            logger("✓ Keystore loaded successfully")
-
-            // Step 4: Sign APK (V2 + V3)
-            logger("\nStep 4: Signing APK (V2 + V3 enabled)...")
-            
-            // Prepare output file
-            val outputDir = File(Environment.getExternalStoragePublicDirectory(
-                Environment.DIRECTORY_DOWNLOADS), OUTPUT_FOLDER)
-            
-            if (!outputDir.exists()) {
-                outputDir.mkdirs()
+            logger("Step 2: ZipAlign...")
+            tempAlignedFile = File(context.cacheDir, "aligned.apk")
+            if (!ZipAligner().alignZip(tempInputFile, tempAlignedFile)) {
+                return SignResult(false, "ZipAlign failed")
             }
 
-            val outputFileName = originalFileName.replace(".apk", "_signed.apk")
-            outputFile = File(outputDir, outputFileName)
+            logger("Step 3: Loading keystore...")
+            val (privateKey, certs) = loadKeystore()
 
-            // Sign the APK
+            val outputDir = File(
+                Environment.getExternalStoragePublicDirectory(
+                    Environment.DIRECTORY_DOWNLOADS
+                ),
+                OUTPUT_FOLDER
+            )
+            outputDir.mkdirs()
+
+            val outputFile = File(
+                outputDir,
+                originalFileName.replace(".apk", "_signed.apk")
+            )
+
             val signerConfig = ApkSigner.SignerConfig.Builder(
-                "HEZWIN", privateKey, certificates
+                "HEZWIN",
+                privateKey,
+                certs
             ).build()
 
-            val signer = ApkSigner.Builder(listOf(signerConfig))
+            ApkSigner.Builder(listOf(signerConfig))
                 .setInputApk(tempAlignedFile)
                 .setOutputApk(outputFile)
-                .setV1SigningEnabled(false)  // V1 disabled
-                .setV2SigningEnabled(true)   // V2 enabled
-                .setV3SigningEnabled(true)   // V3 enabled
-                .setV4SigningEnabled(false)
+                .setV2SigningEnabled(true)
+                .setV3SigningEnabled(true)
                 .build()
+                .sign()
 
-            signer.sign()
-            logger("✓ APK signed successfully")
+            logger("Step 4: Verifying...")
+            val verified = ApkVerifier.Builder(outputFile).build().verify()
 
-            // Step 5: Verify signature
-            logger("\nStep 5: Verifying APK signature...")
-            val verified = verifyApk(outputFile)
-            
-            if (verified) {
-                logger("✓ Signature verification PASSED")
-                logger("\n═══════════════════════════════════")
-                return SignResult(
-                    true,
-                    "APK signed successfully!",
-                    outputFile.absolutePath
-                )
+            return if (verified.isVerified) {
+                SignResult(true, "Signed successfully", outputFile.absolutePath)
             } else {
-                logger("✗ Signature verification FAILED")
-                return SignResult(false, "Signature verification failed!")
+                SignResult(false, "Verification failed")
             }
 
+        } catch (e: Exception) {
+            return SignResult(false, e.message ?: "Unknown error")
+        } finally {
+            tempInputFile?.delete()
+            tempAlignedFile?.delete()
+        }
+    }
+
+    private fun copyUriToFile(uri: Uri, dest: File) {
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            FileOutputStream(dest).use { output ->
+                input.copyTo(output)
+            }
+        }
+    }
+
+    private fun loadKeystore(): Pair<PrivateKey, List<X509Certificate>> {
+        val ksFile = File(context.filesDir, "hezwin_keystore.jks")
+
+        if (!ksFile.exists()) {
+            context.resources.openRawResource(R.raw.hezwin_keystore).use { input ->
+                FileOutputStream(ksFile).use { output ->
+                    input.copyTo(output)
+                }
+            }
+        }
+
+        val ks = KeyStore.getInstance("JKS")
+        FileInputStream(ksFile).use {
+            ks.load(it, KEYSTORE_PASSWORD.toCharArray())
+        }
+
+        val privateKey =
+            ks.getKey(KEY_ALIAS, KEY_PASSWORD.toCharArray()) as PrivateKey
+        val certs =
+            ks.getCertificateChain(KEY_ALIAS).map { it as X509Certificate }
+
+        return Pair(privateKey, certs)
+    }
+}
         } catch (e: Exception) {
             logger("✗ Exception: ${e.message}")
             e.printStackTrace()
