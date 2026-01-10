@@ -121,6 +121,59 @@ class SignerManager(private val context: Context) {
     }
 
     private fun loadKeystore(): Pair<PrivateKey, List<X509Certificate>> {
+    val keystoreFile = File(context.filesDir, "hezwin_keystore.jks")
+
+    if (!keystoreFile.exists()) {
+        context.resources.openRawResource(R.raw.hezwin_keystore).use { input ->
+            FileOutputStream(keystoreFile).use { output ->
+                input.copyTo(output)
+            }
+        }
+    }
+
+    val keyStore = KeyStore.getInstance("JKS")
+    FileInputStream(keystoreFile).use { fis ->
+        keyStore.load(fis, KEYSTORE_PASSWORD.toCharArray())
+    }
+
+    val privateKey = keyStore.getKey(KEY_ALIAS, KEY_PASSWORD.toCharArray()) as PrivateKey
+    val certChain = keyStore.getCertificateChain(KEY_ALIAS)
+    val certificates = certChain.map { it as X509Certificate }
+
+    return Pair(privateKey, certificates)
+}
+
+    private fun verifyApk(apkFile: File): Boolean {
+        return try {
+            val verifier = ApkVerifier.Builder(apkFile).build()
+            val result = verifier.verify()
+            result.isVerified && !result.isVerifiedUsingV1Scheme
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+}
+        } catch (e: Exception) {
+            logger("✗ Exception: ${e.message}")
+            e.printStackTrace()
+            return SignResult(false, "Error: ${e.message}")
+        } finally {
+            // Cleanup temporary files
+            tempInputFile?.delete()
+            tempAlignedFile?.delete()
+        }
+    }
+
+    private fun copyUriToFile(uri: Uri, destFile: File) {
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            FileOutputStream(destFile).use { output ->
+                input.copyTo(output)
+            }
+        }
+    }
+
+    private fun loadKeystore(): Pair<PrivateKey, List<X509Certificate>> {
         // Copy keystore from assets to internal storage
         val keystoreFile = File(context.filesDir, KEYSTORE_FILE)
         if (!keystoreFile.exists()) {
