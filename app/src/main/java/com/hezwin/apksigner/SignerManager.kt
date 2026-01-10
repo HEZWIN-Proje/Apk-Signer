@@ -28,121 +28,92 @@ class SignerManager(private val context: Context) {
 
     fun signApk(apkUri: Uri, originalFileName: String, logger: (String) -> Unit): SignResult {
         var tempInputFile: File? = null
-        var tempAlignedFile: File? = null
         var outputFile: File? = null
 
         try {
-            // Step 1: Copy APK to temp location
-            logger("Step 1: Copying APK to temporary location...")
-            tempInputFile = File(context.cacheDir, "temp_input.apk")
+            logger("Step 1: Copy APK")
+            tempInputFile = File(context.cacheDir, "input.apk")
             copyUriToFile(apkUri, tempInputFile)
-            logger("✓ APK copied (${tempInputFile.length() / 1024} KB)")
 
-            
-            // Step 3: Load keystore
-            logger("\nStep 3: Loading keystore...")
+            logger("Step 2: Load keystore")
             val (privateKey, certificates) = loadKeystore()
-            logger("✓ Keystore loaded successfully")
 
-            // Step 4: Sign APK (V2 + V3)
-            logger("\nStep 4: Signing APK (V2 + V3 enabled)...")
-            
-            // Prepare output file
-            val outputDir = File(Environment.getExternalStoragePublicDirectory(
-                Environment.DIRECTORY_DOWNLOADS), OUTPUT_FOLDER)
-            
-            if (!outputDir.exists()) {
-                outputDir.mkdirs()
-            }
+            logger("Step 3: Prepare output")
+            val outputDir = File(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                OUTPUT_FOLDER
+            )
+            if (!outputDir.exists()) outputDir.mkdirs()
 
-            val outputFileName = originalFileName.replace(".apk", "_signed.apk")
-            outputFile = File(outputDir, outputFileName)
+            outputFile = File(
+                outputDir,
+                originalFileName.replace(".apk", "_signed.apk")
+            )
 
-            // Sign the APK
+            logger("Step 4: Sign APK")
             val signerConfig = ApkSigner.SignerConfig.Builder(
-                "HEZWIN", privateKey, certificates
+                KEY_ALIAS, privateKey, certificates
             ).build()
 
-            val signer = ApkSigner.Builder(listOf(signerConfig))
+            ApkSigner.Builder(listOf(signerConfig))
                 .setInputApk(tempInputFile)
                 .setOutputApk(outputFile)
-                .setV1SigningEnabled(false)  // V1 disabled
-                .setV2SigningEnabled(true)   // V2 enabled
-                .setV3SigningEnabled(true)   // V3 enabled
+                .setV1SigningEnabled(false)
+                .setV2SigningEnabled(true)
+                .setV3SigningEnabled(true)
                 .setV4SigningEnabled(false)
                 .build()
+                .sign()
 
-            signer.sign()
-            logger("✓ APK signed successfully")
-
-            // Step 5: Verify signature
-            logger("\nStep 5: Verifying APK signature...")
-            val verified = verifyApk(outputFile)
-            
-            if (verified) {
-                logger("✓ Signature verification PASSED")
-                logger("\n═══════════════════════════════════")
-                return SignResult(
-                    true,
-                    "APK signed successfully!",
-                    outputFile.absolutePath
-                )
-            } else {
-                logger("✗ Signature verification FAILED")
-                return SignResult(false, "Signature verification failed!")
+            logger("Step 5: Verify")
+            if (!verifyApk(outputFile)) {
+                return SignResult(false, "Signature verification failed")
             }
 
-        } catch (e: Exception) {
-            logger("✗ Exception: ${e.message}")
-            e.printStackTrace()
-            return SignResult(false, "Error: ${e.message}")
-        } finally {
-            // Cleanup temporary files
-            tempInputFile?.delete()
-            
+            return SignResult(true, "APK signed successfully", outputFile.absolutePath)
 
+        } catch (e: Exception) {
+            return SignResult(false, e.message ?: "Unknown error")
+        } finally {
+            tempInputFile?.delete()
         }
     }
 
-    private fun copyUriToFile(uri: Uri, destFile: File) {
-        context.contentResolver.openInputStream(uri)?.use { input ->
-            FileOutputStream(destFile).use { output ->
+    private fun copyUriToFile(uri: Uri, dest: File) {
+        context.contentResolver.openInputStream(uri)!!.use { input ->
+            FileOutputStream(dest).use { output ->
                 input.copyTo(output)
             }
         }
     }
 
     private fun loadKeystore(): Pair<PrivateKey, List<X509Certificate>> {
-        // Copy keystore from assets to internal storage
-        val keystoreFile = File(context.filesDir, KEYSTORE_FILE)
-        if (!keystoreFile.exists()) {
+        val ksFile = File(context.cacheDir, KEYSTORE_FILE)
+
+        if (!ksFile.exists()) {
             context.assets.open(KEYSTORE_FILE).use { input ->
-                FileOutputStream(keystoreFile).use { output ->
+                FileOutputStream(ksFile).use { output ->
                     input.copyTo(output)
                 }
             }
         }
 
         val keyStore = KeyStore.getInstance("JKS")
-        FileInputStream(keystoreFile).use { fis ->
-            keyStore.load(fis, KEYSTORE_PASSWORD.toCharArray())
+        FileInputStream(ksFile).use {
+            keyStore.load(it, KEYSTORE_PASSWORD.toCharArray())
         }
 
-        val privateKey = keyStore.getKey(KEY_ALIAS, KEY_PASSWORD.toCharArray()) as PrivateKey
-        val certChain = keyStore.getCertificateChain(KEY_ALIAS)
-        val certificates = certChain.map { it as X509Certificate }
+        val privateKey =
+            keyStore.getKey(KEY_ALIAS, KEY_PASSWORD.toCharArray()) as PrivateKey
 
-        return Pair(privateKey, certificates)
+        val certs = keyStore.getCertificateChain(KEY_ALIAS)
+            .map { it as X509Certificate }
+
+        return privateKey to certs
     }
 
-    private fun verifyApk(apkFile: File): Boolean {
-        return try {
-            val verifier = ApkVerifier.Builder(apkFile).build()
-            val result = verifier.verify()
-            result.isVerified && !result.isVerifiedUsingV1Scheme
-        } catch (e: Exception) {
-            e.printStackTrace()
-            false
-        }
+    private fun verifyApk(apk: File): Boolean {
+        val result = ApkVerifier.Builder(apk).build().verify()
+        return result.isVerified && !result.isVerifiedUsingV1Scheme
     }
 }
