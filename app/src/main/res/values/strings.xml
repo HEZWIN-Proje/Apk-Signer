@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="app_name">HEZWIN APK Signer</string>
-    <string name="select_apk">Select APK</string>
-    <string name="sign_apk">Sign APK</string>
-    <string name="no_apk_selected">No APK selected</string>
-    <string name="log_console">Log Console</string>
-    <string name="ready_to_sign">Ready to sign APK files.\nPlease select an APK file to begin.</string>
-</resources>
