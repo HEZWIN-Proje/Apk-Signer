@@ -7,8 +7,8 @@ import android.util.Base64
 import com.android.apksig.ApkSigner
 import com.android.apksig.ApkVerifier
 import java.io.File
-import java.io.FileOutputStream
 import java.io.FileInputStream
+import java.io.FileOutputStream
 import java.security.KeyStore
 import java.security.PrivateKey
 import java.security.cert.X509Certificate
@@ -27,8 +27,8 @@ class SignerManager(private val context: Context) {
         private const val KEY_PASSWORD = "HEZWIN123"
         private const val OUTPUT_FOLDER = "HEZWIN_Signed"
 
-        // JKS dosyasının base64 hali
-        private const val KEYSTORE_BASE64 = """
+        // Base64 olarak gömülmüş keystore
+        private const val BASE64_KEYSTORE = """
 MIIKVAIBAzCCCf4GCSqGSIb3DQEHAaCCCe8EggnrMIIJ5zCCBa4GCSqGSIb3DQEHAaCCBZ8EggWb
 MIIFlzCCBZMGCyqGSIb3DQEMCgECoIIFQDCCBTwwZgYJKoZIhvcNAQUNMFkwOAYJKoZIhvcNAQUM
 MCsEFAlmYUpL9dAnIO8w9aBhCs7bX9bhAgInEAIBIDAMBggqhkiG9w0CCQUAMB0GCWCGSAFlAwQB
@@ -54,28 +54,6 @@ nhO4e2X2ktMYTeARKVtfUg+Nx8mXL+gRGuypHrpNjcZ71gxtZtrjOyUt44e5yaLOQ8SloF419xJp
 bEicwR71mySqLpgrXhdH5jHzIePwaPp+ilTsqYrnTq690pCKJY9WoPuj++ACIi48/8DYZ0Q1AJ+J
 Z2vIeML8bDxXXKJgyrIq2GlXC/4g9ioHyHsPG4xHh152UQN/DI+sA2hzFj2464JKorj76ZI/iJfA
 M/DZbHYqNRhkjeGyTwwz8wqt8WQBzAXnT7lyTQTmnEpzCBkuDVSNEyTbd/0j/VTHHt00ymG3XA/E
-jzFAMBsGCSqGSIb3DQEJFDEOHgwAaABlAHoAdwBpAG4wIQYJKoZIhvcNAQkVMRQEElRpbWUgMTc2
-NzgwMzI2Nzk3NzCCBDEGCSqGSIb3DQEHBqCCBCIwggQeAgEAMIIEFwYJKoZIhvcNAQcBMGYGCSqG
-SIb3DQEFDTBZMDgGCSqGSIb3DQEFDDArBBTHlfi3DnRb2BfTWThnH2zPDHmvggICJxACASAwDAYI
-KoZIhvcNAgkFADAdBglghkgBZQMEASoEEL+4+qmwgbVURGHoQZJY9+OAggOgnTkl7p0vhRWz0YNc
-OFAi0o2mnOZI5CHmFTOl9bRhS87so2+mpxREsr3gqN8lu1TVUKNXzzSX/oSBD3BLmhrZyr/hXj+n
-2cRyemybE+604iPDdwAzf6tJYZKYlK1OcnIQdfpR/Wzpl9lQhuRkqxr+2miUb6UDLZT3c8UjrCJn
-7pPycipW9OVrvCqzZlxKztJj8GLgBBBQPIjoWojbE21/KtpPj1Kvf75vdnGpaD3hU6xt5x5oZf1t
-EOMV7EkwPMEqIm4xW3msp9n/5YoMdZrRXe82lcZKVYgxTycMDEjZGEFF041akLXxLnqjMQqDYUwi
-zjU96jWyczHEHDhaoZtILuowAR0B05Hu5ppctCvF1dcn2YI8sCDzf6Crh3fpAvbDJEQ5J2M2dmm6
-R/nzcMqEUky6V694GuG6rRFD9XVpJ8bliZEu5yWw2HCrHuFgo3hGhFekRw8H6vpOUGiElXHwRdYy
-BnpOa5c7Va0CBsDQ1jdmI+89/uTxxDrTpdxGrh+/JkpZQ3PP7fZ8eExSv11yWj0UMiur/IlCeD2F
-TsBBCG5bPdDef/ftjE1PPxf2jISALo+Rr52nutUe5B3diGlV4YzmQT+t51tNuWG3NCSmHM+3uSAo
-KUIarb2wKc0qh/4IAsG3BNpM1BlzyBGf9qDleMXaQuknBSwyoxos0dbpZttSbTA9rSuzddO1QD1Z
-Q0d36Z0CqB6PJBFAnzQsPQFTqnRT4tcnao4A6ev3fQRMkCHJU03f94Wvkg+XMSHlxZwQiTMj/Tvz
-6OQ6ZCM6+WGBlWLiCRlFrjOc+Gd/0PDXjfTKcwaysmcuKO1KGZ2q7mmggnOAaaqm17i1hQ4q9LRB
-jmbyZecsYZZin67cAcCiltICG1noffBq3WLUiUCL/EnL1bAAfJiEhCLiGQkhZcgQucSy3z9ivwix
-YD3ljjstEXEiACl6KlPY2VWzQVltHUbCLD4xaM3WHIjB9D9XvrzCoP9Q0H0gIOl3i4uN/davza2j
-sCssZBZrQRqDMeXBXRBS1bPXwCjv+yLojwZaNjYs5EZ+yiZffaHRErmQ/1/HC5U4P4KaB/kxOi4Q
-/jq4XfN4gsQQ7AxOX6ymR1mGSZZ2Iq8iv411jjfwlNZNueF8IIsMqtQ/KxdYbCvzLNvyOpvE5Xu0
-i0/rUxnQs97SCw0UoUwZaXQ/kSXg89oGBZ3Ttv14OeMUWdxktQyLYd71va4dGc9B3LkEZoomTJll
-NaTibzBNMDEwDQYJYIZIAWUDBAIBBQAEIFsGt9hmhivQUK8PFTg2glQDYj6I+lnXyywOJwNwqPEu
-BBTtXCB2af0tLL9OuZanrqffG9baQQICJxA=
 """
     }
 
@@ -93,8 +71,8 @@ BBTtXCB2af0tLL9OuZanrqffG9baQQICJxA=
             logger("Step 1: Copy APK")
             copyUriToFile(apkUri, tempInputFile)
 
-            logger("Step 2: Load keystore from base64")
-            val (privateKey, certificates) = loadKeystoreFromBase64()
+            logger("Step 2: Load keystore")
+            val (privateKey, certificates) = loadKeystore()
 
             logger("Step 3: Sign APK")
             val signerConfig = ApkSigner.SignerConfig.Builder(KEY_ALIAS, privateKey, certificates).build()
@@ -130,10 +108,13 @@ BBTtXCB2af0tLL9OuZanrqffG9baQQICJxA=
         }
     }
 
-    private fun loadKeystoreFromBase64(): Pair<PrivateKey, List<X509Certificate>> {
-        val ksBytes = Base64.decode(KEYSTORE_BASE64.trim(), Base64.DEFAULT)
+    private fun loadKeystore(): Pair<PrivateKey, List<X509Certificate>> {
         val ksFile = File(context.cacheDir, "HEZWIN_PRO.jks")
-        FileOutputStream(ksFile).use { it.write(ksBytes) }
+
+        if (!ksFile.exists()) {
+            val decoded = Base64.decode(BASE64_KEYSTORE, Base64.DEFAULT)
+            FileOutputStream(ksFile).use { it.write(decoded) }
+        }
 
         val keyStore = KeyStore.getInstance("JKS")
         FileInputStream(ksFile).use { keyStore.load(it, KEYSTORE_PASSWORD.toCharArray()) }
